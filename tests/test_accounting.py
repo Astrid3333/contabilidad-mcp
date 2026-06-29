@@ -1,18 +1,17 @@
 import os, sys, pytest
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 os.environ["ACCOUNTING_DB_PATH"] = "/tmp/test_contabilidad.db"
-import db
-import accounting as acc
+import db, accounting as acc
 
 @pytest.fixture(autouse=True)
 def fresh_db():
-    path = os.environ["ACCOUNTING_DB_PATH"]
-    if os.path.exists(path):
-        os.remove(path)
-    db.init_db()
+    p = "/tmp/test_contabilidad.db"
+    if os.path.exists(p):
+        os.remove(p)
+    db.init_db(seed_defaults=False)
     yield
-    if os.path.exists(path):
-        os.remove(path)
+    if os.path.exists(p):
+        os.remove(p)
 
 def chart():
     acc.create_account("1000", "Caja", "ASSET")
@@ -36,7 +35,7 @@ def test_asiento_balanceado():
         {"account": "4000", "debit": 0, "credit": 1000},
         {"account": "2100", "debit": 0, "credit": 190},
     ])
-    assert r["id"] is not None
+    assert r["entry_id"] is not None
 
 def test_asiento_desbalanceado():
     chart()
@@ -53,7 +52,10 @@ def test_saldo_cuenta():
         {"account": "4000", "debit": 0, "credit": 1000},
         {"account": "2100", "debit": 0, "credit": 190},
     ])
-    assert acc.account_balance("1000")["balance"] == 1190
+    with acc.get_conn() as conn:
+        bs = acc._account_balances(conn)
+        bal = next(x for x in bs if x["code"] == "1000")
+        assert bal["balance"] == 1190
 
 def test_estado_resultados():
     chart()
